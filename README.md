@@ -9,7 +9,8 @@ dosyayı **hangi uygulamanın kullandığını** gösterir ve isterseniz o uygul
 
 ## Kurulum
 
-1. `KilitBul-Setup-<sürüm>.exe` dosyasını çalıştırın ve yönetici onayı verin.
+1. [Releases](https://github.com/coraspirin/KilitBul/releases/latest) sayfasından `KilitBul-Setup-<sürüm>.exe`
+   dosyasını indirip çalıştırın ve yönetici onayı verin.
    Program `C:\Program Files\Kilit Bul\` altına kurulur; .NET kurulumu gerekmez.
 2. Kurulum Başlat menüsüne veya masaüstüne kısayol koymaz. Uygulama yalnızca sağ tık menüsünden açılır:
    dosya veya klasöre sağ tık → 🔒 **Kilit Bul**. (Hemen görünmezse Dosya Gezgini'ni kapatıp açın.)
@@ -17,6 +18,12 @@ dosyayı **hangi uygulamanın kullandığını** gösterir ve isterseniz o uygul
 
 > Kurulum dosyası dijital olarak imzalı olmadığından Windows SmartScreen uyarı verebilir:
 > **Daha fazla bilgi → Yine de çalıştır**.
+
+### Güncellemeler
+
+Kilit Bul her açıldığında [son sürümü](https://github.com/coraspirin/KilitBul/releases/latest) denetler.
+Yeni bir sürüm varsa pencerede **"Güncelle"** şeridi çıkar; tıklayınca kurulum dosyası indirilir, GitHub'ın
+bildirdiği SHA-256 özetiyle doğrulanır ve kurulum başlatılır. İnternet yoksa denetim sessizce atlanır.
 
 ### Kurulum ne yapar?
 
@@ -68,6 +75,15 @@ Kurulum dosyası Windows SDK (makeappx, signtool) ve MSVC gerektirdiği için Gi
 (`.github/workflows/build.yml`): menü eklentisi DLL'i derlenir, sertifika üretilip sparse paket imzalanır,
 paket runner'da deneme amaçlı kaydedilip kaldırılır, ardından NSIS ile `KilitBul-Setup-<sürüm>.exe` oluşturulur.
 
+### Yeni sürüm yayınlama
+
+1. `src/KilitBul/KilitBul.csproj` içindeki `<Version>`'ı artırın (ör. `1.4.0`).
+2. İsterseniz sürüm notlarını `installer/release-notes/v1.4.0.md` olarak yazın (yoksa GitHub otomatik üretir).
+3. Commit'leyip etiketi gönderin: `git tag v1.4.0 && git push origin main v1.4.0`.
+
+CI, etiket ile sürümün uyuştuğunu denetler, kurulum dosyasını üretir ve GitHub Release olarak yayınlar.
+Kurulu uygulamalar bir sonraki açılışta yeni sürümü görür.
+
 İkon `installer/make-icon.py` ile üretilir (`python3 installer/make-icon.py`; exe ikonu, pencere görseli ve MSIX logoları).
 
 Proje yapısı:
@@ -79,6 +95,7 @@ Proje yapısı:
 | `src/KilitBul/Services/ProcessKiller.cs` | Kapatma / zorla sonlandırma, korumalı işlemler |
 | `src/KilitBul/Services/ShellRegistration.cs` | Klasik sağ tık menüsü kaydı (`--register`, geliştirme için) |
 | `src/KilitBul/Services/ElevationHelper.cs` | Yalnızca seçilen işlemi yönetici olarak sonlandırma (`--kill`) |
+| `src/KilitBul/Services/UpdateService.cs` | GitHub Releases'ten güncelleme denetimi ve indirme |
 | `src/KilitBul/ViewModels/MainViewModel.cs` | Arayüz mantığı (CommunityToolkit.Mvvm) |
 | `shell/KilitBulShell.cpp` | Windows 11 modern menü eklentisi (IExplorerCommand, C++) |
 | `installer/msix/AppxManifest.xml` | Menü eklentisini tanıtan sparse paket manifesti |

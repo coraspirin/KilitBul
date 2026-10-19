@@ -3,12 +3,15 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write   # v* etiketlerinde GitHub Release oluşturmak için
     steps:
       - uses: actions/checkout@v4
 
@@ -130,3 +133,26 @@ jobs:
         with:
           name: KilitBul-win-x64
           path: dist/KilitBul-Setup-*.exe
+
+      # v1.2.3 gibi bir etiket gönderildiğinde kurulum dosyasını GitHub Releases'e yayınlar.
+      # Uygulama güncellemeleri buradan (releases/latest) denetler.
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = "${{ steps.version.outputs.value }}"
+          if ($tag -ne "v$version") {
+            Write-Output "::error::Etiket ($tag) ile KilitBul.csproj sürümü (v$version) uyuşmuyor"
+            exit 1
+          }
+          $notes = "installer/release-notes/$tag.md"
+          $setup = Get-ChildItem dist -Filter "KilitBul-Setup-$version.exe" | Select-Object -First 1
+          if (Test-Path $notes) {
+            gh release create $tag $setup.FullName --title "Kilit Bul $version" --notes-file $notes --verify-tag
+          } else {
+            gh release create $tag $setup.FullName --title "Kilit Bul $version" --generate-notes --verify-tag
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

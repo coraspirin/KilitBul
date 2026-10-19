@@ -47,11 +47,13 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
 
+        var updateCheck = window.ViewModel.CheckForUpdatesAsync();
         if (args.Length > 0)
         {
             var target = NormalizeArgument(args[0]);
             await window.ViewModel.SetTargetAndScanAsync(target);
         }
+        await updateCheck;
     }
 
     /// <summary>

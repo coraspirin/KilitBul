@@ -22,6 +22,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Hedef dosya/klasör -->
@@ -130,8 +131,21 @@
             </DockPanel>
         </Border>
 
+        <!-- Yeni sürüm şeridi (GitHub Releases) -->
+        <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,8" CornerRadius="8" BorderThickness="1"
+                Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource AccentBrush}"
+                Visibility="{Binding ShowUpdateBanner, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Güncelle" Style="{StaticResource AccentButton}" MinHeight="28"
+                        Padding="12,3" Margin="12,0,0,0" Command="{Binding InstallUpdateCommand}" />
+                <TextBlock Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="16" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding UpdateText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </Border>
+
         <!-- Durum + tek eylem -->
-        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+        <DockPanel Grid.Row="5" Margin="0,12,0,0">
             <Button DockPanel.Dock="Right" Content="Seçilen uygulamayı durdur" Margin="12,0,0,0"
                     Command="{Binding RequestStopCommand}">
                 <Button.Style>

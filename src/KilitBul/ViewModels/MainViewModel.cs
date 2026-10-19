@@ -40,6 +40,25 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ConfirmText))]
     private bool _isConfirming;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateText), nameof(ShowUpdateBanner))]
+    private UpdateInfo? _availableUpdate;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateText))]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    private bool _isUpdating;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateText))]
+    private double _updateProgress;
+
+    public bool ShowUpdateBanner => AvailableUpdate is not null;
+
+    public string UpdateText => AvailableUpdate is not { } u ? ""
+        : IsUpdating ? $"Kilit Bul {u.Version} indiriliyor… %{UpdateProgress * 100:0}"
+        : $"Kilit Bul {u.Version} yayınlandı.";
+
     public string TargetName => string.IsNullOrEmpty(TargetPath) ? "Kilit Bul" : Path.GetFileName(TargetPath.TrimEnd('\\')) is { Length: > 0 } n ? n : TargetPath;
     public string TargetFolder => string.IsNullOrEmpty(TargetPath) ? "Bir dosya veya klasöre sağ tıklayıp Kilit Bul'u seçin." : Path.GetDirectoryName(TargetPath.TrimEnd('\\')) ?? TargetPath;
 
@@ -167,6 +186,35 @@ public partial class MainViewModel : ObservableObject
     }
 
     private bool CanConfirmStop() => !IsBusy;
+
+    /// <summary>GitHub Releases'te yeni sürüm var mı? Ağ yoksa sessizce geçer.</summary>
+    public async Task CheckForUpdatesAsync() => AvailableUpdate = await UpdateService.CheckAsync();
+
+    [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
+    private async Task InstallUpdateAsync()
+    {
+        if (AvailableUpdate is not { } update)
+            return;
+
+        IsUpdating = true;
+        try
+        {
+            var progress = new Progress<double>(p => UpdateProgress = p);
+            var installer = await UpdateService.DownloadAsync(update, progress);
+            if (UpdateService.LaunchInstaller(installer))
+                System.Windows.Application.Current.Shutdown(); // kurulum exe'yi değiştirebilsin
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Güncelleme indirilemedi: " + ex.Message, error: true);
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
+    }
+
+    private bool CanInstallUpdate() => !IsUpdating;
 
     private void SetStatus(string text, bool error = false)
     {
