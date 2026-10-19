@@ -28,7 +28,11 @@ public static class ProcessKiller
 
     public static bool IsProtected(LockingProcess p)
     {
-        if (p.ProcessId is 0 or 4 || p.AppType == LockingAppType.Critical)
+        if (p.ProcessId is 0 or 4)
+            return true;
+        // Restart Manager çağıran işlemi (KilitBul'un kendisi) her zaman RmCritical olarak raporlar;
+        // diğer RmCritical işlemler sonlandırılırsa sistem çökebilir.
+        if (p.AppType == LockingAppType.Critical && p.ProcessId != Environment.ProcessId)
             return true;
         var exeName = p.ExecutablePath is not null ? System.IO.Path.GetFileName(p.ExecutablePath) : p.Name;
         return ProtectedNames.Contains(exeName) || ProtectedNames.Contains(p.Name);
