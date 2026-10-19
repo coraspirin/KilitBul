@@ -17,7 +17,20 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Test
-        run: dotnet test -c Release --logger "console;verbosity=normal"
+        run: dotnet test -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=results.trx" --results-directory TestResults
+
+      # Başarısız testleri annotation olarak yaz (log indirmeden PR/çalışma sayfasında görünsün).
+      - name: Report test failures
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem TestResults -Filter *.trx -Recurse | ForEach-Object {
+            [xml]$trx = Get-Content $_.FullName
+            $trx.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' } | ForEach-Object {
+              $msg = ($_.Output.ErrorInfo.Message + ' | ' + $_.Output.ErrorInfo.StackTrace) -replace "`r?`n", ' '
+              Write-Output "::error title=$($_.testName)::$msg"
+            }
+          }
 
       - name: Publish (tek exe, win-x64)
         run: dotnet publish src/KilitBul/KilitBul.csproj -c Release -r win-x64 -o publish
