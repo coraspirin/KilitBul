@@ -35,6 +35,78 @@ jobs:
       - name: Publish (tek exe, win-x64)
         run: dotnet publish src/KilitBul/KilitBul.csproj -c Release -r win-x64 -o dist
 
+      - name: Sürüm
+        id: version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content src/KilitBul/KilitBul.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Sağ tık menüsü eklentisi (KilitBulShell.dll)
+        shell: pwsh
+        run: |
+          cmake -S shell -B build/shell -A x64
+          cmake --build build/shell --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/shell/Release/KilitBulShell.dll dist/
+
+      # Her derlemede yeni, kendinden imzalı sertifika: özel anahtar yalnızca bu çalışmada kalır.
+      # Kurulum açık anahtarı (KilitBul.cer) hedef bilgisayarın "Güvenilir Kişiler" deposuna ekler.
+      - name: Sparse MSIX paketi (imzalı)
+        id: msix
+        shell: pwsh
+        run: |
+          $sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" |
+                 Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
+          if (-not $sdk) { Write-Output "::error::Windows SDK (makeappx) bulunamadı"; exit 1 }
+          $bin = $sdk.DirectoryName
+
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=KilitBul" -FriendlyName "Kilit Bul" `
+                    -KeyUsage DigitalSignature -CertStoreLocation "Cert:\CurrentUser\My" `
+                    -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") `
+                    -NotAfter (Get-Date).AddYears(10)
+          $plain = [guid]::NewGuid().ToString()
+          $secure = ConvertTo-SecureString -String $plain -Force -AsPlainText
+          New-Item -ItemType Directory -Force build | Out-Null
+          Export-PfxCertificate -Cert $cert -FilePath build/sign.pfx -Password $secure | Out-Null
+          Export-Certificate -Cert $cert -FilePath dist/KilitBul.cer | Out-Null
+
+          $pkg = "build/msix"
+          New-Item -ItemType Directory -Force $pkg | Out-Null
+          Copy-Item installer/msix/Assets $pkg -Recurse
+          (Get-Content installer/msix/AppxManifest.xml -Raw) `
+            -replace 'Version="1\.2\.0\.0"', ('Version="' + "${{ steps.version.outputs.value }}" + '.0"') |
+            Set-Content "$pkg/AppxManifest.xml" -Encoding utf8
+
+          & "$bin\makeappx.exe" pack /d $pkg /p dist/KilitBul.msix /nv /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$bin\signtool.exe" sign /fd SHA256 /f build/sign.pfx /p $plain dist/KilitBul.msix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Remove-Item build/sign.pfx
+          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+
+      # Paketin gerçekten kaydedilebildiğini doğrular (yalnızca Windows 11 / Server 2025 tabanlı runner'da).
+      - name: Paket kayıt testi
+        shell: pwsh
+        run: |
+          $build = [int](Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuildNumber
+          if ($build -lt 22000) { Write-Output "::warning::Runner Windows build $build < 22000; paket kayıt testi atlandı"; exit 0 }
+          certutil -f -addstore TrustedPeople dist/KilitBul.cer | Out-Null
+          try {
+            Add-AppxPackage -Path dist/KilitBul.msix -ExternalLocation (Resolve-Path dist).Path -ErrorAction Stop
+            $p = Get-AppxPackage -Name coraspirin.KilitBul
+            if (-not $p) { throw "paket kayıtlı görünmüyor" }
+            Write-Output "Paket kaydedildi: $($p.PackageFullName)"
+          } catch {
+            Write-Output "::error::Add-AppxPackage başarısız: $($_.Exception.Message)"
+            exit 1
+          } finally {
+            Get-AppxPackage -Name coraspirin.KilitBul | Remove-AppxPackage -ErrorAction SilentlyContinue
+            certutil -delstore TrustedPeople ${{ steps.msix.outputs.thumbprint }} | Out-Null
+          }
+
       - name: Kurulum dosyası (NSIS)
         shell: pwsh
         run: |
@@ -44,13 +116,10 @@ jobs:
             if (-not (Test-Path $candidate)) { choco install nsis -y --no-progress | Out-Null }
             $makensis = $candidate
           }
-          $version = ([xml](Get-Content src/KilitBul/KilitBul.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          & $makensis "-DVERSION=$version" installer/KilitBul.nsi
+          & $makensis "-DVERSION=${{ steps.version.outputs.value }}" "-DCERT_THUMBPRINT=${{ steps.msix.outputs.thumbprint }}" installer/KilitBul.nsi
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
         with:
           name: KilitBul-win-x64
-          path: |
-            dist/KilitBul.exe
-            dist/KilitBul-Setup-*.exe
+          path: dist/KilitBul-Setup-*.exe

@@ -11,7 +11,7 @@
     <ApplicationIcon>Assets\KilitBul.ico</ApplicationIcon>
     <AssemblyName>KilitBul</AssemblyName>
     <RootNamespace>KilitBul</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>KilitBul</Product>
     <Description>Dosyayı/klasörü kilitleyen işlemleri bulur ve sonlandırır.</Description>
   </PropertyGroup>
@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\KilitBul.ico" />
+    <Resource Include="Assets\Lock64.png" />
   </ItemGroup>
 
   <ItemGroup>

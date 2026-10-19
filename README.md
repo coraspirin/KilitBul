@@ -1,40 +1,42 @@
 # KilitBul
 
 "Bu dosya başka bir programda açık olduğundan işlem tamamlanamıyor" hatası aldığınızda,
-dosyayı **hangi uygulamanın kullandığını** gösterir ve isterseniz o uygulamayı kapatır/sonlandırır.
+dosyayı **hangi uygulamanın kullandığını** gösterir ve isterseniz o uygulamayı durdurur.
 
+- **Windows 11** içindir; Dosya Gezgini'nin modern sağ tık menüsüne asma kilit ikonlu **"Kilit Bul"** öğesi ekler.
 - Dosya ve klasörlerde çalışır (klasörde alt klasörlerdeki tüm dosyalar taranır).
-- Explorer sağ tık menüsüne asma kilit ikonlu **"Kilit Bul"** öğesi ekler.
-- Yönetici yetkisi gerektirmez; gerektiğinde tek tıkla yönetici olarak yeniden açılır.
+- Küçük, sade bir pencere: kilitleyen uygulamaların listesi ve tek bir **"Seçilen uygulamayı durdur"** butonu.
 
 ## Kurulum
 
 1. `KilitBul-Setup-<sürüm>.exe` dosyasını çalıştırın ve yönetici onayı verin.
    Program `C:\Program Files\Kilit Bul\` altına kurulur; .NET kurulumu gerekmez.
 2. Kurulum Başlat menüsüne veya masaüstüne kısayol koymaz. Uygulama yalnızca sağ tık menüsünden açılır:
-   dosya veya klasöre sağ tık → 🔒 **Kilit Bul**.
-3. Kaldırmak için: **Ayarlar → Uygulamalar** (veya Denetim Masası → Programlar) → **Kilit Bul** → Kaldır.
+   dosya veya klasöre sağ tık → 🔒 **Kilit Bul**. (Hemen görünmezse Dosya Gezgini'ni kapatıp açın.)
+3. Kaldırmak için: **Ayarlar → Uygulamalar** → **Kilit Bul** → Kaldır.
 
-> Windows 11'de klasik menü öğeleri **"Daha fazla seçenek göster"** (veya Shift + sağ tık) altında görünür.
->
 > Kurulum dosyası dijital olarak imzalı olmadığından Windows SmartScreen uyarı verebilir:
 > **Daha fazla bilgi → Yine de çalıştır**.
 
-Kurulumsuz (portable) kullanım: `KilitBul.exe`'yi bir klasöre koyup `KilitBul.exe --register` çalıştırın
-(yalnızca sizin kullanıcınız için menüye ekler); kaldırmak için `KilitBul.exe --unregister`.
+### Kurulum ne yapar?
+
+Windows 11'in modern menüsüne yalnızca imzalı bir uygulama paketi öğe ekleyebilir. Bu yüzden kurulum:
+
+- `KilitBul.exe`, menü eklentisi `KilitBulShell.dll` ve küçük bir **sparse MSIX paketini** Program Files'a kopyalar,
+- paketi imzalayan, her sürümde yeniden üretilen **kendinden imzalı "CN=KilitBul" sertifikasını** bu bilgisayarın
+  *Güvenilir Kişiler* deposuna ekler (kaldırırken siler; sertifikanın özel anahtarı hiçbir yerde saklanmaz),
+- paketi kurulumu yapan Windows kullanıcısı için kaydeder.
 
 ## Kullanım
 
 1. Silinemeyen dosya/klasöre sağ tıklayın → **Kilit Bul**.
-   (Açık pencereye başka bir dosya sürükleyebilir veya "Dosya seç…", "Klasör seç…" kullanabilirsiniz.)
-2. Listede kilidi tutan uygulamalar görünür: ad, PID, tür, kilitli dosya, exe yolu.
-3. Bir veya birden fazla satır seçin (seçim yoksa tümüne uygulanır):
-   - **Kapat** — uygulamaya normal kapanma isteği gönderir; kaydedilmemiş belge varsa uygulama sorar.
-   - **Zorla sonlandır (Del)** — onay sonrası işlemi hemen öldürür.
-4. Liste boşaldığında **🗑 Şimdi sil** ile öğeyi Geri Dönüşüm Kutusu'na taşıyabilirsiniz.
+2. Açılan pencerede o öğeyi kullanan uygulamalar ikonlarıyla listelenir.
+3. Bir uygulamayı seçip **Seçilen uygulamayı durdur**'a basın (veya `Delete`), onaylayın → uygulama kapatılır
+   ve liste yenilenir. Liste boşalınca dosyayı silebilir veya taşıyabilirsiniz.
 
-Sistem için kritik işlemler (System, csrss, lsass, winlogon vb.) gri gösterilir ve sonlandırılamaz.
-`explorer.exe` sonlandırılmadan önce ayrıca uyarılırsınız.
+İpuçları: `F5` listeyi yeniler, `Esc` onayı veya pencereyi kapatır. Başka bir kullanıcının ya da yönetici olarak
+çalışan bir uygulamayı durdurmak gerekiyorsa Kilit Bul yalnızca o işlem için yönetici izni (UAC) ister.
+Sistem için kritik işlemler (System, csrss, lsass, winlogon vb.) soluk gösterilir ve seçilemez.
 
 ## Nasıl çalışır?
 
@@ -45,16 +47,11 @@ tarafından kilitlendiği bulunur. Ayrıca klasör altından exe/dll yüklemiş 
 
 ## Bilinen kısıtlar
 
+- Yalnızca Windows 11 (64 bit) desteklenir.
+- Menü öğesi kurulumu yapan Windows kullanıcısı için kaydedilir; aynı bilgisayardaki başka kullanıcı hesaplarında görünmez.
 - Bir klasörü yalnızca **çalışma dizini** olarak tutan işlemler (ör. o klasörde açık bir `cmd`/PowerShell)
-  Restart Manager tarafından raporlanmaz. Bu yüzden klasör taramasında liste boş çıksa bile silme başarısız olabilir;
-  bu durumda KilitBul taramayı tekrarlar.
+  Restart Manager tarafından raporlanmaz; klasör taramasında liste boş çıksa bile silme başarısız olabilir.
 - Erişim izni olmayan alt klasörlerdeki dosyalar taramada atlanır.
-- Sürücü kökleri taranabilir ama **Şimdi sil** ile silinemez.
-- KilitBul yönetici olarak açıldığında, Windows güvenlik kısıtı (UIPI) nedeniyle normal Explorer penceresinden
-  sürükle-bırak çalışmaz; **Dosya seç…/Klasör seç…** kullanın.
-- KilitBul'un kendi işlemi listede görünebilir (ör. exe'sinin bulunduğu klasör tarandığında) ama sonlandırılamaz.
-- Normal kullanıcı olarak başka kullanıcıların/servislerin işlemleri listelenebilir ama sonlandırılamayabilir;
-  bu durumda **🛡 Yönetici olarak aç** kullanın.
 - Çekirdek sürücülerinin tuttuğu kilitler (ör. antivirüs filtreleri) görünmez.
 
 ## Geliştirme
@@ -65,10 +62,13 @@ Gereksinim: .NET 8 SDK.
 dotnet build
 dotnet test                                                  # yalnızca Windows'ta
 dotnet publish src/KilitBul -c Release -r win-x64 -o dist     # tek exe
-makensis -DVERSION=1.1.0 installer/KilitBul.nsi               # dist/KilitBul-Setup-1.1.0.exe
 ```
 
-İkon `installer/make-icon.py` ile üretilir (`python3 installer/make-icon.py` → `src/KilitBul/Assets/KilitBul.ico`).
+Kurulum dosyası Windows SDK (makeappx, signtool) ve MSVC gerektirdiği için GitHub Actions'ta üretilir
+(`.github/workflows/build.yml`): menü eklentisi DLL'i derlenir, sertifika üretilip sparse paket imzalanır,
+paket runner'da deneme amaçlı kaydedilip kaldırılır, ardından NSIS ile `KilitBul-Setup-<sürüm>.exe` oluşturulur.
+
+İkon `installer/make-icon.py` ile üretilir (`python3 installer/make-icon.py`; exe ikonu, pencere görseli ve MSIX logoları).
 
 Proje yapısı:
 
@@ -77,10 +77,12 @@ Proje yapısı:
 | `src/KilitBul/Services/RestartManager.cs` | Restart Manager P/Invoke sarmalayıcısı |
 | `src/KilitBul/Services/LockFinder.cs` | Dosya/klasör tarama, kilit sahibini bulma |
 | `src/KilitBul/Services/ProcessKiller.cs` | Kapatma / zorla sonlandırma, korumalı işlemler |
-| `src/KilitBul/Services/ShellRegistration.cs` | Sağ tık menüsü kaydı (HKCU) |
-| `src/KilitBul/Services/ElevationHelper.cs` | Yönetici olarak yeniden başlatma |
+| `src/KilitBul/Services/ShellRegistration.cs` | Klasik sağ tık menüsü kaydı (`--register`, geliştirme için) |
+| `src/KilitBul/Services/ElevationHelper.cs` | Yalnızca seçilen işlemi yönetici olarak sonlandırma (`--kill`) |
 | `src/KilitBul/ViewModels/MainViewModel.cs` | Arayüz mantığı (CommunityToolkit.Mvvm) |
-| `installer/KilitBul.nsi` | NSIS kurulum betiği (Program Files + HKLM sağ tık menüsü) |
+| `shell/KilitBulShell.cpp` | Windows 11 modern menü eklentisi (IExplorerCommand, C++) |
+| `installer/msix/AppxManifest.xml` | Menü eklentisini tanıtan sparse paket manifesti |
+| `installer/KilitBul.nsi` | NSIS kurulum betiği |
 
 GitHub Actions (`.github/workflows/build.yml`) her push'ta Windows üzerinde testleri çalıştırır,
-`KilitBul.exe` ve `KilitBul-Setup-*.exe` dosyalarını artefakt olarak yükler.
+`KilitBul-Setup-*.exe` dosyasını artefakt olarak yükler.

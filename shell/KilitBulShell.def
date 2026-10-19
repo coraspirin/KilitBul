@@ -1,0 +1,4 @@
+LIBRARY KilitBulShell
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

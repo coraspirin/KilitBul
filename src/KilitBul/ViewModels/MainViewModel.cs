@@ -1,10 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KilitBul.Services;
-using Microsoft.Win32;
 
 namespace KilitBul.ViewModels;
 
@@ -12,51 +10,55 @@ public partial class MainViewModel : ObservableObject
 {
     private CancellationTokenSource? _scanCts;
 
-    // Kapatma/sonlandırma sürerken yeni hedef (ör. sürükle-bırak) kabul edilmez.
-    private bool _actionRunning;
-
     public ObservableCollection<ProcessItemViewModel> Processes { get; } = new();
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasTarget), nameof(IsTargetFree))]
-    [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(DeleteTargetCommand))]
+    [NotifyPropertyChangedFor(nameof(TargetName), nameof(TargetFolder))]
     private string? _targetPath;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsIdle))]
-    [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(CloseSelectedCommand), nameof(KillSelectedCommand),
-        nameof(DeleteTargetCommand), nameof(CancelScanCommand), nameof(BrowseFileCommand), nameof(BrowseFolderCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState), nameof(ShowList))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(RequestStopCommand), nameof(ConfirmStopCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
-    private string _statusText = "Bir dosya veya klasör seçin ya da pencereye sürükleyin.";
-
-    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState), nameof(ShowList))]
     private bool _scanCompleted;
 
-    public bool HasTarget => !string.IsNullOrWhiteSpace(TargetPath);
-    public bool IsIdle => !IsBusy;
-    public bool IsAdministrator { get; } = ElevationHelper.IsAdministrator();
-    public bool ShowElevateButton => !IsAdministrator;
-    // Sürücü kökleri hiçbir zaman "silinebilir" gösterilmez.
-    public bool IsTargetFree => ScanCompleted && Processes.Count == 0 && !LockFinder.IsRootPath(TargetPath);
+    [ObservableProperty]
+    private string _statusText = "";
 
-    public string WindowTitle => IsAdministrator ? "Kilit Bul (Yönetici)" : "Kilit Bul";
+    [ObservableProperty]
+    private bool _statusIsError;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RequestStopCommand))]
+    [NotifyPropertyChangedFor(nameof(ConfirmText))]
+    private ProcessItemViewModel? _selectedProcess;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConfirmText))]
+    private bool _isConfirming;
+
+    public string TargetName => string.IsNullOrEmpty(TargetPath) ? "Kilit Bul" : Path.GetFileName(TargetPath.TrimEnd('\\')) is { Length: > 0 } n ? n : TargetPath;
+    public string TargetFolder => string.IsNullOrEmpty(TargetPath) ? "Bir dosya veya klasöre sağ tıklayıp Kilit Bul'u seçin." : Path.GetDirectoryName(TargetPath.TrimEnd('\\')) ?? TargetPath;
+
+    public bool ShowEmptyState => ScanCompleted && !IsBusy && Processes.Count == 0;
+    public bool ShowList => Processes.Count > 0;
+
+    public string ConfirmText => SelectedProcess is null ? "" : $"{SelectedProcess.Name} kapatılsın mı? Kaydedilmemiş veriler kaybolabilir.";
 
     public MainViewModel()
     {
         Processes.CollectionChanged += (_, _) =>
         {
-            OnPropertyChanged(nameof(IsTargetFree));
-            CloseSelectedCommand.NotifyCanExecuteChanged();
-            KillSelectedCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(ShowEmptyState));
+            OnPropertyChanged(nameof(ShowList));
         };
     }
 
     public async Task SetTargetAndScanAsync(string path)
     {
-        if (_actionRunning)
-            return;
         TargetPath = path;
         await RefreshAsync();
     }
@@ -68,243 +70,107 @@ public partial class MainViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(target))
             return;
 
-        // Önceki tarama hâlâ sürüyorsa (ör. tarama sırasında yeni öğe sürüklendi) iptal et.
-        // Eski taramanın devamı, yalnızca _scanCts hâlâ kendisiyse arayüz durumuna dokunur.
         _scanCts?.Cancel();
         var cts = new CancellationTokenSource();
         _scanCts = cts;
 
         IsBusy = true;
+        IsConfirming = false;
         ScanCompleted = false;
-        Processes.Clear();
-        StatusText = "Taranıyor…";
+        SetStatus("Aranıyor…");
 
         var progress = new Progress<ScanProgress>(p =>
         {
             if (_scanCts == cts)
-                StatusText = p.Message;
+                SetStatus(p.Message);
         });
         try
         {
             var found = await LockFinder.FindAsync(target, progress, cts.Token);
             if (_scanCts != cts)
-                return; // bu arada yeni bir tarama başladı; sonuçlar eski
+                return; // bu arada yeni bir tarama başladı
 
-            foreach (var p in found)
+            var previous = SelectedProcess?.ProcessId;
+            Processes.Clear();
+            foreach (var p in found.Where(p => !p.IsSelf))
                 Processes.Add(new ProcessItemViewModel(p));
+            SelectedProcess = Processes.FirstOrDefault(p => p.ProcessId == previous && p.CanStop)
+                              ?? Processes.FirstOrDefault(p => p.CanStop);
 
             ScanCompleted = true;
-            StatusText = BuildResultMessage(target, found.Count);
+            SetStatus(Processes.Count switch
+            {
+                0 => "",
+                1 => "1 uygulama bu öğeyi kullanıyor.",
+                var n => $"{n} uygulama bu öğeyi kullanıyor.",
+            });
         }
         catch (OperationCanceledException)
         {
-            if (_scanCts == cts)
-                StatusText = "Tarama iptal edildi.";
         }
         catch (Exception ex)
         {
             if (_scanCts == cts)
-                StatusText = "Hata: " + ex.Message;
+                SetStatus(ex.Message, error: true);
         }
         finally
         {
             if (_scanCts == cts)
-            {
                 IsBusy = false;
-                OnPropertyChanged(nameof(IsTargetFree));
-            }
         }
     }
 
-    private string BuildResultMessage(string target, int count)
-    {
-        if (count > 0)
-        {
-            var msg = $"{count} işlem bu öğeyi kullanıyor.";
-            return IsAdministrator ? msg : msg + " Bazı işlemler listede görünmüyorsa yönetici olarak deneyin.";
-        }
+    private bool CanRefresh() => !IsBusy && !string.IsNullOrWhiteSpace(TargetPath);
 
-        // Restart Manager yalnızca dosya kilitlerini görür; klasörün kendisine açık handle'lar
-        // (ör. çalışma dizini o klasör olan bir komut istemi) ve erişilemeyen dosyalar raporlanmaz.
-        if (Directory.Exists(target))
-            return "Klasördeki dosyaları kullanan bir işlem bulunamadı. Not: klasörü çalışma dizini olarak tutan işlemler "
-                   + "(ör. açık bir komut istemi) tespit edilemez ve erişilemeyen dosyalar atlanır.";
+    [RelayCommand(CanExecute = nameof(CanRequestStop))]
+    private void RequestStop() => IsConfirming = true;
 
-        return "Bu dosyayı kullanan bir işlem bulunamadı. Silebilirsiniz.";
-    }
-
-    private bool CanRefresh() => HasTarget && !IsBusy;
-
-    [RelayCommand(CanExecute = nameof(CanCancelScan))]
-    private void CancelScan() => _scanCts?.Cancel();
-
-    private bool CanCancelScan() => IsBusy;
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private async Task BrowseFileAsync()
-    {
-        var dlg = new OpenFileDialog { Title = "Kilitli dosyayı seçin", CheckFileExists = true };
-        if (dlg.ShowDialog() == true)
-            await SetTargetAndScanAsync(dlg.FileName);
-    }
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private async Task BrowseFolderAsync()
-    {
-        var dlg = new OpenFolderDialog { Title = "Kilitli klasörü seçin" };
-        if (dlg.ShowDialog() == true)
-            await SetTargetAndScanAsync(dlg.FolderName);
-    }
-
-    private IReadOnlyList<ProcessItemViewModel> SelectedOrAll(System.Collections.IList? selected)
-    {
-        var items = selected?.OfType<ProcessItemViewModel>().ToList() ?? new List<ProcessItemViewModel>();
-        return items.Count > 0 ? items : Processes.ToList();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanActOnProcesses))]
-    private async Task CloseSelectedAsync(System.Collections.IList? selected)
-    {
-        var targets = SelectedOrAll(selected).Where(p => p.CanTerminate).ToList();
-        if (targets.Count == 0)
-            return;
-
-        int noWindow = 0;
-        _actionRunning = true;
-        IsBusy = true;
-        try
-        {
-            foreach (var t in targets)
-            {
-                var r = ProcessKiller.CloseGracefully(t.Model);
-                t.Status = Describe(r);
-                if (r == KillResult.NoWindow)
-                    noWindow++;
-            }
-
-            StatusText = "Kapatma isteği gönderildi, bekleniyor…";
-            await Task.Delay(1500);
-        }
-        finally
-        {
-            IsBusy = false;
-            _actionRunning = false;
-        }
-
-        await RefreshAsync();
-        if (noWindow > 0 && Processes.Count > 0)
-            StatusText += $" {noWindow} işlemin penceresi yok; 'Zorla sonlandır' kullanın.";
-    }
-
-    [RelayCommand(CanExecute = nameof(CanActOnProcesses))]
-    private async Task KillSelectedAsync(System.Collections.IList? selected)
-    {
-        var all = SelectedOrAll(selected);
-        var targets = all.Where(p => p.CanTerminate).ToList();
-        if (targets.Count == 0)
-        {
-            MessageBox.Show("Seçili işlemler korumalı sistem işlemleri olduğu için sonlandırılamaz.", "KilitBul",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var names = string.Join(Environment.NewLine, targets.Select(t => $"  • {t.Name} (PID {t.ProcessId})"));
-        var msg = $"Aşağıdaki işlemler zorla sonlandırılacak. Kaydedilmemiş veriler kaybolabilir.{Environment.NewLine}{Environment.NewLine}{names}";
-        if (targets.Any(t => ProcessKiller.IsExplorer(t.Model)))
-            msg += $"{Environment.NewLine}{Environment.NewLine}Uyarı: Windows Gezgini (explorer.exe) sonlandırılırsa görev çubuğu ve masaüstü kısa süreliğine kaybolur; Windows genellikle onu otomatik yeniden başlatır.";
-        msg += $"{Environment.NewLine}{Environment.NewLine}Devam edilsin mi?";
-
-        if (MessageBox.Show(msg, "Zorla sonlandır", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No)
-            != MessageBoxResult.Yes)
-            return;
-
-        List<(ProcessItemViewModel t, KillResult r)> results;
-        _actionRunning = true;
-        IsBusy = true;
-        try
-        {
-            results = await Task.Run(() => targets.Select(t => (t, r: ProcessKiller.Kill(t.Model))).ToList());
-        }
-        finally
-        {
-            IsBusy = false;
-            _actionRunning = false;
-        }
-
-        foreach (var (t, r) in results)
-            t.Status = Describe(r);
-
-        int denied = results.Count(x => x.r == KillResult.AccessDenied);
-        await RefreshAsync();
-
-        if (denied > 0)
-        {
-            StatusText = $"{denied} işlem için erişim reddedildi.";
-            if (!IsAdministrator &&
-                MessageBox.Show($"{denied} işlem sonlandırılamadı (erişim reddedildi). KilitBul yönetici olarak yeniden açılsın mı?",
-                    "Yetki gerekli", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-            {
-                RestartElevated();
-            }
-        }
-    }
-
-    private bool CanActOnProcesses(System.Collections.IList? _) => !IsBusy && Processes.Count > 0;
-
-    [RelayCommand(CanExecute = nameof(CanDeleteTarget))]
-    private async Task DeleteTargetAsync()
-    {
-        if (string.IsNullOrWhiteSpace(TargetPath))
-            return;
-
-        var path = TargetPath;
-        if (MessageBox.Show($"\"{path}\" Geri Dönüşüm Kutusu'na taşınsın mı?", "Sil",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-            return;
-
-        try
-        {
-            if (Directory.Exists(path))
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-            else
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-
-            StatusText = "Silindi (Geri Dönüşüm Kutusu'na taşındı).";
-            Processes.Clear();
-            ScanCompleted = false;
-            TargetPath = null;
-        }
-        catch (OperationCanceledException)
-        {
-            StatusText = "Silme iptal edildi.";
-        }
-        catch (Exception ex)
-        {
-            StatusText = "Silinemedi: " + ex.Message;
-            await RefreshAsync();
-        }
-    }
-
-    private bool CanDeleteTarget() => HasTarget && !IsBusy && !LockFinder.IsRootPath(TargetPath);
+    private bool CanRequestStop() => !IsBusy && SelectedProcess is { CanStop: true };
 
     [RelayCommand]
-    private void RestartElevated()
+    private void CancelStop() => IsConfirming = false;
+
+    [RelayCommand(CanExecute = nameof(CanConfirmStop))]
+    private async Task ConfirmStopAsync()
     {
-        var args = string.IsNullOrWhiteSpace(TargetPath) ? Array.Empty<string>() : new[] { TargetPath };
-        if (ElevationHelper.RestartElevated(args))
-            Application.Current.Shutdown();
+        IsConfirming = false;
+        if (SelectedProcess is not { CanStop: true } item)
+            return;
+
+        IsBusy = true;
+        SetStatus($"{item.Name} durduruluyor…");
+        KillResult? result;
+        try
+        {
+            result = await Task.Run(() => ProcessKiller.Kill(item.Model));
+            if (result == KillResult.AccessDenied && !ElevationHelper.IsAdministrator())
+                result = await ElevationHelper.KillElevatedAsync(item.Model);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        await RefreshAsync();
+
+        var message = result switch
+        {
+            null => "Yönetici izni verilmediği için durdurulamadı.",
+            KillResult.Success or KillResult.AlreadyExited => null,
+            KillResult.AccessDenied => $"{item.Name} durdurulamadı: erişim reddedildi.",
+            KillResult.StillRunning => $"{item.Name} hâlâ kapanıyor; birkaç saniye sonra yenileyin (F5).",
+            KillResult.Protected => $"{item.Name} bir sistem işlemi; durdurulamaz.",
+            _ => $"{item.Name} durdurulamadı.",
+        };
+        if (message is not null)
+            SetStatus(message, error: true);
     }
 
-    private static string Describe(KillResult r) => r switch
+    private bool CanConfirmStop() => !IsBusy;
+
+    private void SetStatus(string text, bool error = false)
     {
-        KillResult.Success => "Sonlandırıldı",
-        KillResult.AlreadyExited => "Zaten kapanmış",
-        KillResult.AccessDenied => "Erişim reddedildi",
-        KillResult.Protected => "Korumalı",
-        KillResult.NoWindow => "Penceresi yok",
-        KillResult.StillRunning => "Kapanmadı",
-        _ => "Başarısız",
-    };
+        StatusText = text;
+        StatusIsError = error;
+    }
 }

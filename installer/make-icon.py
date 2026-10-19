@@ -1,6 +1,11 @@
 """Kilit Bul asma kilit ikonunu (çok boyutlu .ico) üretir.
 
-Kullanım: python3 installer/make-icon.py [çıktı.ico] [önizleme.png]
+Kullanım: python3 installer/make-icon.py [önizleme.png]
+
+Üretilenler (depo kökünden çalıştırılır):
+  src/KilitBul/Assets/KilitBul.ico     exe / pencere / menü ikonu
+  src/KilitBul/Assets/Lock64.png       pencere başlığındaki kilit
+  installer/msix/Assets/*.png          sparse MSIX paketi logoları
 """
 import sys
 from PIL import Image, ImageDraw
@@ -63,12 +68,24 @@ def draw_lock(size: int) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 
-def main() -> None:
-    out = sys.argv[1] if len(sys.argv) > 1 else "src/KilitBul/Assets/KilitBul.ico"
-    frames = [draw_lock(sz) for sz in SIZES]
-    frames[-1].save(out, format="ICO", sizes=[(sz, sz) for sz in SIZES], append_images=frames[:-1])
+def logo(canvas: int, lock: int) -> Image.Image:
+    """Saydam kare zemin ortasında kilit (MSIX logoları için kenar boşluklu)."""
+    img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    off = (canvas - lock) // 2
+    img.alpha_composite(draw_lock(lock), (off, off))
+    return img
 
-    if len(sys.argv) > 2:
+
+def main() -> None:
+    frames = [draw_lock(sz) for sz in SIZES]
+    frames[-1].save("src/KilitBul/Assets/KilitBul.ico", format="ICO",
+                    sizes=[(sz, sz) for sz in SIZES], append_images=frames[:-1])
+    draw_lock(64).save("src/KilitBul/Assets/Lock64.png")
+
+    for name, canvas, lock in (("StoreLogo", 50, 44), ("Square44x44Logo", 44, 40), ("Square150x150Logo", 150, 100)):
+        logo(canvas, lock).save(f"installer/msix/Assets/{name}.png")
+
+    if len(sys.argv) > 1:
         # Önizleme: tüm boyutlar yan yana, açık ve koyu zemin üzerinde
         w = sum(SIZES) + 10 * (len(SIZES) + 1)
         sheet = Image.new("RGBA", (w, 2 * 256 + 30), (255, 255, 255, 255))
@@ -78,7 +95,7 @@ def main() -> None:
             sheet.alpha_composite(fr, (x, 10))
             sheet.alpha_composite(fr, (x, 256 + 20 + 5))
             x += sz + 10
-        sheet.save(sys.argv[2])
+        sheet.save(sys.argv[1])
 
 
 if __name__ == "__main__":

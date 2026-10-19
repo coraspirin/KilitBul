@@ -52,4 +52,17 @@ public class ProcessKillerTests
         Assert.False(string.IsNullOrEmpty(path));
         Assert.True(System.IO.File.Exists(path));
     }
+
+    [Theory]
+    [InlineData()]
+    [InlineData("--kill")]
+    [InlineData("--kill", "abc", "0")]
+    [InlineData("--kill", "1234", "xyz")]
+    public void KillArguments_Invalid_ReturnsFailed(params string[] args)
+        => Assert.Equal(KillResult.Failed, App.KillFromArguments(args));
+
+    [Fact]
+    public void KillArguments_ExitedProcess_ReturnsAlreadyExited()
+        => Assert.Equal(KillResult.AlreadyExited,
+            App.KillFromArguments(new[] { "--kill", (int.MaxValue - 3).ToString(), "0" }));
 }

@@ -1,40 +1,51 @@
-﻿; Kilit Bul kurulum betiği (NSIS 3)
+﻿; Kilit Bul kurulum betiği (NSIS 3) — Windows 11
 ;
-; Derleme (depo kökünden):
-;   dotnet publish src/KilitBul/KilitBul.csproj -c Release -r win-x64 -o dist
-;   makensis -DVERSION=1.1.0 installer/KilitBul.nsi
+; Gerekli dosyalar dist/ altında (CI üretir, bkz. .github/workflows/build.yml):
+;   KilitBul.exe        WPF uygulaması (tek dosya)
+;   KilitBulShell.dll   modern sağ tık menüsü eklentisi (shell/)
+;   KilitBul.msix       imzalı sparse paket (installer/msix/AppxManifest.xml)
+;   KilitBul.cer        paketi imzalayan sertifikanın açık anahtarı
 ;
-; Kurulum tüm kullanıcılar içindir: Program Files'a kopyalar ve sağ tık menüsünü HKLM'ye yazar.
-; Başlat menüsü veya masaüstü kısayolu oluşturmaz; uygulama yalnızca sağ tık menüsünden açılır.
+; Derleme: makensis -DVERSION=1.2.0 -DCERT_THUMBPRINT=<parmak izi> installer/KilitBul.nsi
+;
+; Kurulum Program Files'a kopyalar, sertifikayı bu bilgisayarın "Güvenilir Kişiler" deposuna ekler ve
+; paketi kurulumu yapan kullanıcı için kaydeder. Kısayol oluşturmaz; uygulama yalnızca sağ tık menüsünden açılır.
 
 Unicode true
 ManifestDPIAware true
 
 !ifndef VERSION
-  !define VERSION "1.1.0"
+  !define VERSION "1.2.0"
 !endif
-!ifndef SRC_EXE
-  !define SRC_EXE "..\dist\KilitBul.exe"
+!ifndef CERT_THUMBPRINT
+  !error "CERT_THUMBPRINT tanımlı değil (makensis -DCERT_THUMBPRINT=...)"
+!endif
+!ifndef DIST
+  !define DIST "..\dist"
 !endif
 
 !define APP_NAME     "Kilit Bul"
 !define APP_EXE      "KilitBul.exe"
-!define VERB_KEY     "KilitBul"
+!define SHELL_DLL    "KilitBulShell.dll"
+!define PACKAGE_NAME "coraspirin.KilitBul"
 !define PUBLISHER    "coraspirin"
 !define UNINST_KEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\KilitBul"
 !define ICON_FILE    "..\src\KilitBul\Assets\KilitBul.ico"
+!define POWERSHELL   '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command'
 
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
 Name "${APP_NAME}"
-OutFile "..\dist\KilitBul-Setup-${VERSION}.exe"
+OutFile "${DIST}\KilitBul-Setup-${VERSION}.exe"
 InstallDir "$PROGRAMFILES64\${APP_NAME}"
 InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 BrandingText "${APP_NAME} ${VERSION}"
+ShowInstDetails show
 
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey /LANG=1055 "ProductName" "${APP_NAME}"
@@ -48,9 +59,9 @@ VIAddVersionKey /LANG=1055 "LegalCopyright" "${PUBLISHER}"
 !define MUI_UNICON "${ICON_FILE}"
 !define MUI_ABORTWARNING
 
-!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz ${APP_NAME} ${VERSION} sürümünü bilgisayarınıza kuracak.$\r$\n$\r$\nKilit Bul, silinemeyen veya taşınamayan bir dosya ya da klasörü hangi programın kullandığını gösterir ve isterseniz o programı kapatır.$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
+!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz ${APP_NAME} ${VERSION} sürümünü bilgisayarınıza kuracak.$\r$\n$\r$\nKilit Bul, silinemeyen veya taşınamayan bir dosya ya da klasörü hangi uygulamanın kullandığını gösterir ve isterseniz o uygulamayı durdurur.$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
 !define MUI_FINISHPAGE_TITLE "Kurulum tamamlandı"
-!define MUI_FINISHPAGE_TEXT "${APP_NAME} kuruldu.$\r$\n$\r$\nKullanmak için bir dosyaya veya klasöre sağ tıklayıp $\"${APP_NAME}$\" seçeneğini seçin.$\r$\n$\r$\nWindows 11'de bu seçenek $\"Daha fazla seçenek göster$\" altında (veya Shift + sağ tık ile) görünür."
+!define MUI_FINISHPAGE_TEXT "${APP_NAME} kuruldu.$\r$\n$\r$\nKullanmak için bir dosyaya veya klasöre sağ tıklayıp $\"${APP_NAME}$\" seçeneğini seçin.$\r$\n$\r$\nMenüde hemen görünmezse Dosya Gezgini'ni kapatıp yeniden açın."
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -62,18 +73,31 @@ VIAddVersionKey /LANG=1055 "LegalCopyright" "${PUBLISHER}"
 
 !insertmacro MUI_LANGUAGE "Turkish"
 
-; Sağ tık menüsü kaydı: CLS = hedef sınıf ("*" veya "Directory")
-!macro WriteVerb CLS
-  WriteRegStr HKLM "Software\Classes\${CLS}\shell\${VERB_KEY}" "" "${APP_NAME}"
-  WriteRegStr HKLM "Software\Classes\${CLS}\shell\${VERB_KEY}" "Icon" '"$INSTDIR\${APP_EXE}",0'
-  WriteRegStr HKLM "Software\Classes\${CLS}\shell\${VERB_KEY}\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+; 1.1 sürümünün klasik menü kayıtları (HKLM) ve uygulama içi/--register kayıtları (HKCU).
+!macro RemoveClassicVerbs
+  DeleteRegKey HKLM "Software\Classes\*\shell\KilitBul"
+  DeleteRegKey HKLM "Software\Classes\Directory\shell\KilitBul"
+  DeleteRegKey HKCU "Software\Classes\*\shell\KilitBul"
+  DeleteRegKey HKCU "Software\Classes\Directory\shell\KilitBul"
+  DeleteRegKey HKCU "Software\Classes\Drive\shell\KilitBul"
 !macroend
 
-; Önceki sürümlerin (ve uygulama içi "sağ tık menüsüne ekle" butonunun) HKCU kayıtları HKLM'yi gölgeler; temizle.
-!macro RemoveUserVerbs
-  DeleteRegKey HKCU "Software\Classes\*\shell\${VERB_KEY}"
-  DeleteRegKey HKCU "Software\Classes\Directory\shell\${VERB_KEY}"
-  DeleteRegKey HKCU "Software\Classes\Drive\shell\${VERB_KEY}"
+; Bu kullanıcı için kayıtlı Kilit Bul paketini kaldırır (yoksa sessizce geçer).
+!macro RemovePackage
+  nsExec::ExecToLog '${POWERSHELL} "Get-AppxPackage -Name ${PACKAGE_NAME} | Remove-AppxPackage"'
+  Pop $0
+!macroend
+
+; Yüklü (Explorer'ın kullandığı) bir DLL silinemez ama yeniden adlandırılabilir; eskisi yeniden başlatmada silinir.
+!macro ReleaseFile FILE
+  Delete "${FILE}.old"
+  ${If} ${FileExists} "${FILE}"
+    Delete "${FILE}"
+    ${If} ${FileExists} "${FILE}"
+      Rename "${FILE}" "${FILE}.old"
+      Delete /REBOOTOK "${FILE}.old"
+    ${EndIf}
+  ${EndIf}
 !macroend
 
 !macro NotifyShell
@@ -83,10 +107,15 @@ VIAddVersionKey /LANG=1055 "LegalCopyright" "${PUBLISHER}"
 
 Function .onInit
   ${IfNot} ${RunningX64}
-    MessageBox MB_ICONSTOP "${APP_NAME} yalnızca 64 bit Windows'ta çalışır."
+    MessageBox MB_ICONSTOP "${APP_NAME} yalnızca 64 bit Windows 11'de çalışır."
     Abort
   ${EndIf}
   SetRegView 64
+  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion" "CurrentBuildNumber"
+  ${If} $0 < 22000
+    MessageBox MB_ICONSTOP "${APP_NAME} yalnızca Windows 11'de çalışır.$\r$\n(Bu bilgisayarın Windows sürüm numarası: $0)"
+    Abort
+  ${EndIf}
 FunctionEnd
 
 Function un.onInit
@@ -95,18 +124,45 @@ FunctionEnd
 
 Section "Kilit Bul" SecMain
   SectionIn RO
+  ${DisableX64FSRedirection} ; 64 bit PowerShell / certutil
 
-  ; Güncelleme sırasında çalışan bir kopya varsa exe üzerine yazılamaz.
+  DetailPrint "Önceki sürüm kapatılıyor…"
   nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM ${APP_EXE}'
   Pop $0
+  !insertmacro RemovePackage
+  !insertmacro RemoveClassicVerbs
+
+  ; Önceki sürümün sertifikası (her derleme yeni sertifika üretir)
+  ReadRegStr $1 HKLM "${UNINST_KEY}" "CertThumbprint"
+  ${If} $1 != ""
+  ${AndIf} $1 != "${CERT_THUMBPRINT}"
+    nsExec::ExecToLog '"$SYSDIR\certutil.exe" -delstore TrustedPeople $1'
+    Pop $0
+  ${EndIf}
 
   SetOutPath "$INSTDIR"
-  File "/oname=${APP_EXE}" "${SRC_EXE}"
+  !insertmacro ReleaseFile "$INSTDIR\${SHELL_DLL}"
+  File "${DIST}\${APP_EXE}"
+  File "${DIST}\${SHELL_DLL}"
+  File "${DIST}\KilitBul.msix"
+  File "${DIST}\KilitBul.cer"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  !insertmacro RemoveUserVerbs
-  !insertmacro WriteVerb "*"
-  !insertmacro WriteVerb "Directory"
+  DetailPrint "Sertifika güvenilir kişilere ekleniyor…"
+  nsExec::ExecToLog '"$SYSDIR\certutil.exe" -f -addstore TrustedPeople "$INSTDIR\KilitBul.cer"'
+  Pop $0
+  ${If} $0 != 0
+    MessageBox MB_ICONSTOP "Sertifika eklenemedi (certutil hata kodu $0).$\r$\nKurulum geri alınacak."
+    Goto rollback
+  ${EndIf}
+
+  DetailPrint "Sağ tık menüsü kaydediliyor…"
+  nsExec::ExecToLog `${POWERSHELL} "try { Add-AppxPackage -Path '$INSTDIR\KilitBul.msix' -ExternalLocation '$INSTDIR' -ErrorAction Stop; exit 0 } catch { Write-Output $$_.Exception.Message; exit 1 }"`
+  Pop $0
+  ${If} $0 != 0
+    MessageBox MB_ICONSTOP "Sağ tık menüsü kaydedilemedi (ayrıntılar kurulum günlüğünde).$\r$\nKurulum geri alınacak."
+    Goto rollback
+  ${EndIf}
 
   ; Programlar ve Özellikler / Uygulamalar listesi
   WriteRegStr   HKLM "${UNINST_KEY}" "DisplayName"     "${APP_NAME}"
@@ -117,6 +173,7 @@ Section "Kilit Bul" SecMain
   WriteRegStr   HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr   HKLM "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
   WriteRegStr   HKLM "${UNINST_KEY}" "URLInfoAbout"    "https://github.com/coraspirin/KilitBul"
+  WriteRegStr   HKLM "${UNINST_KEY}" "CertThumbprint"  "${CERT_THUMBPRINT}"
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
@@ -124,20 +181,45 @@ Section "Kilit Bul" SecMain
   WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" "$0"
 
   !insertmacro NotifyShell
+  ${EnableX64FSRedirection}
+  Return
+
+rollback:
+  !insertmacro RemovePackage
+  nsExec::ExecToLog '"$SYSDIR\certutil.exe" -delstore TrustedPeople ${CERT_THUMBPRINT}'
+  Pop $0
+  Delete "$INSTDIR\${APP_EXE}"
+  Delete /REBOOTOK "$INSTDIR\${SHELL_DLL}"
+  Delete "$INSTDIR\KilitBul.msix"
+  Delete "$INSTDIR\KilitBul.cer"
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
+  ${EnableX64FSRedirection}
+  Abort "Kurulum tamamlanamadı."
 SectionEnd
 
 Section "Uninstall"
+  ${DisableX64FSRedirection}
+
   nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM ${APP_EXE}'
   Pop $0
+  !insertmacro RemovePackage
+  !insertmacro RemoveClassicVerbs
 
-  DeleteRegKey HKLM "Software\Classes\*\shell\${VERB_KEY}"
-  DeleteRegKey HKLM "Software\Classes\Directory\shell\${VERB_KEY}"
-  !insertmacro RemoveUserVerbs
+  ReadRegStr $1 HKLM "${UNINST_KEY}" "CertThumbprint"
+  ${If} $1 != ""
+    nsExec::ExecToLog '"$SYSDIR\certutil.exe" -delstore TrustedPeople $1'
+    Pop $0
+  ${EndIf}
   DeleteRegKey HKLM "${UNINST_KEY}"
 
   Delete "$INSTDIR\${APP_EXE}"
+  !insertmacro ReleaseFile "$INSTDIR\${SHELL_DLL}"
+  Delete "$INSTDIR\KilitBul.msix"
+  Delete "$INSTDIR\KilitBul.cer"
   Delete "$INSTDIR\Uninstall.exe"
-  RMDir "$INSTDIR"
+  RMDir /REBOOTOK "$INSTDIR"
 
   !insertmacro NotifyShell
+  ${EnableX64FSRedirection}
 SectionEnd

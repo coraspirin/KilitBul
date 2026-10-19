@@ -1,84 +1,162 @@
 <Window x:Class="KilitBul.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{Binding WindowTitle}"
-        Width="980" Height="520" MinWidth="640" MinHeight="320"
-        WindowStartupLocation="CenterScreen"
+        Title="Kilit Bul"
         Icon="Assets/KilitBul.ico"
-        AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver"
-        FontSize="13">
+        Width="440" Height="420" MinWidth="360" MinHeight="300"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="{StaticResource UiFont}" FontSize="13"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True">
     <Window.InputBindings>
         <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
-        <KeyBinding Key="Delete" Command="{Binding KillSelectedCommand}"
-                    CommandParameter="{Binding SelectedItems, ElementName=ProcessGrid}" />
+        <KeyBinding Key="Delete" Command="{Binding RequestStopCommand}" />
     </Window.InputBindings>
 
-    <DockPanel Margin="12">
-        <!-- Hedef -->
-        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+    <Grid Margin="16,12,16,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Hedef dosya/klasör -->
+        <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Hedef:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <TextBox Grid.Column="1" Text="{Binding TargetPath, Mode=OneWay}" IsReadOnly="True"
-                     VerticalContentAlignment="Center" Padding="4" Margin="0,0,8,0" />
-            <Button Grid.Column="2" Content="Dosya seç…" Command="{Binding BrowseFileCommand}" />
-            <Button Grid.Column="3" Content="Klasör seç…" Command="{Binding BrowseFolderCommand}" Margin="0" />
+            <Image Source="Assets/Lock64.png" Width="32" Height="32" Margin="0,0,12,0" VerticalAlignment="Center"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" ToolTip="{Binding TargetPath}">
+                <TextBlock Text="{Binding TargetName}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding TargetFolder}" Style="{StaticResource SecondaryText}" Margin="0,2,0,0" />
+            </StackPanel>
         </Grid>
 
-        <!-- Durum çubuğu -->
-        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" LastChildFill="True">
-            <ProgressBar DockPanel.Dock="Left" Width="120" Height="14" IsIndeterminate="True" Margin="0,0,8,0"
-                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
-            <TextBlock Text="{Binding StatusText}" ToolTip="{Binding StatusText}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <!-- İnce ilerleme çubuğu -->
+        <ProgressBar Grid.Row="1" Height="2" Margin="0,12,0,0" IsIndeterminate="True" BorderThickness="0"
+                     Background="Transparent" Foreground="{DynamicResource AccentBrush}"
+                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
+
+        <!-- Uygulama listesi / boş durum -->
+        <Border Grid.Row="2" Margin="0,12,0,0" CornerRadius="8" BorderThickness="1"
+                Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}">
+            <Grid>
+                <ListBox x:Name="ProcessList" ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}"
+                         Background="Transparent" BorderThickness="0" Padding="4"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         Visibility="{Binding ShowList, Converter={StaticResource BoolToVis}}">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="IsEnabled" Value="{Binding CanStop}" />
+                            <Setter Property="ToolTip" Value="{Binding Tooltip}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="4" Padding="10,7" Margin="0,1" Background="Transparent">
+                                            <Grid>
+                                                <Rectangle x:Name="Pill" Width="3" Height="16" RadiusX="1.5" RadiusY="1.5"
+                                                           HorizontalAlignment="Left" Margin="-8,0,0,0"
+                                                           Fill="{DynamicResource AccentBrush}" Visibility="Collapsed" />
+                                                <ContentPresenter />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ItemHoverBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ItemSelectedBrush}" />
+                                                <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Image Source="{Binding Icon}" Width="24" Height="24" Margin="0,0,12,0" VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Details}" Style="{StaticResource SecondaryText}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
+                            Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="28"
+                               Foreground="{DynamicResource SuccessBrush}" HorizontalAlignment="Center" />
+                    <TextBlock Text="Bu öğeyi kullanan uygulama yok" FontWeight="SemiBold" FontSize="14"
+                               HorizontalAlignment="Center" Margin="0,10,0,2" />
+                    <TextBlock Text="Şimdi silebilir veya taşıyabilirsiniz." Style="{StaticResource SecondaryText}"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Durdurma onayı -->
+        <Border Grid.Row="3" Margin="0,12,0,0" Padding="12" CornerRadius="8" BorderThickness="1"
+                Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource DangerBrush}"
+                Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Button Content="Vazgeç" Style="{StaticResource BaseButton}" Margin="0,0,8,0"
+                            Command="{Binding CancelStopCommand}" />
+                    <Button x:Name="ConfirmButton" Content="Durdur" Style="{StaticResource DangerButton}"
+                            Command="{Binding ConfirmStopCommand}" />
+                </StackPanel>
+                <TextBlock Text="{Binding ConfirmText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <!-- Durum + tek eylem -->
+        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+            <Button DockPanel.Dock="Right" Content="Seçilen uygulamayı durdur" Margin="12,0,0,0"
+                    Command="{Binding RequestStopCommand}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsConfirming}" Value="True">
+                                <Setter Property="Visibility" Value="Hidden" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center" ToolTip="{Binding StatusText}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusIsError}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource ErrorTextBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
         </DockPanel>
-
-        <!-- Eylemler -->
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
-            <Button Content="Yenile (F5)" Command="{Binding RefreshCommand}" />
-            <Button Content="İptal" Command="{Binding CancelScanCommand}"
-                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
-            <Button Content="Kapat" ToolTip="Uygulamaya kapanma isteği gönderir (kaydetmeniz istenebilir). Seçim yoksa tümüne uygulanır."
-                    Command="{Binding CloseSelectedCommand}"
-                    CommandParameter="{Binding SelectedItems, ElementName=ProcessGrid}" />
-            <Button Content="Zorla sonlandır (Del)" Foreground="DarkRed"
-                    ToolTip="İşlemi hemen sonlandırır; kaydedilmemiş veriler kaybolur. Seçim yoksa tümüne uygulanır."
-                    Command="{Binding KillSelectedCommand}"
-                    CommandParameter="{Binding SelectedItems, ElementName=ProcessGrid}" />
-            <Button Content="🛡 Yönetici olarak aç" Command="{Binding RestartElevatedCommand}"
-                    Visibility="{Binding ShowElevateButton, Converter={StaticResource BoolToVis}}" />
-            <Button Content="🗑 Şimdi sil" FontWeight="SemiBold" Command="{Binding DeleteTargetCommand}"
-                    Visibility="{Binding IsTargetFree, Converter={StaticResource BoolToVis}}" />
-        </StackPanel>
-
-        <!-- Liste -->
-        <DataGrid x:Name="ProcessGrid" ItemsSource="{Binding Processes}"
-                  AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended"
-                  CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                  HorizontalGridLinesBrush="#E5E5E5" RowHeight="26">
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="ToolTip" Value="{Binding LockedPathsTooltip}" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsProtected}" Value="True">
-                            <Setter Property="Foreground" Value="Gray" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.RowStyle>
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Uygulama" Binding="{Binding Name}" Width="180" />
-                <DataGridTextColumn Header="PID" Binding="{Binding ProcessId}" Width="70" />
-                <DataGridTextColumn Header="Tür" Binding="{Binding TypeDescription}" Width="120" />
-                <DataGridTextColumn Header="Kilitli dosya" Binding="{Binding LockedPaths}" Width="2*" />
-                <DataGridTextColumn Header="Exe yolu" Binding="{Binding ExecutablePath}" Width="2*" />
-                <DataGridTextColumn Header="Başlangıç" Binding="{Binding StartTime}" Width="120" />
-                <DataGridTextColumn Header="Durum" Binding="{Binding Status}" Width="110" />
-            </DataGrid.Columns>
-        </DataGrid>
-    </DockPanel>
+    </Grid>
 </Window>

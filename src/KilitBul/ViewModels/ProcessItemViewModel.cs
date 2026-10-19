@@ -1,27 +1,25 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows.Media;
 using KilitBul.Services;
 
 namespace KilitBul.ViewModels;
 
-public partial class ProcessItemViewModel : ObservableObject
+public sealed class ProcessItemViewModel
 {
     public ProcessItemViewModel(LockingProcess model) => Model = model;
 
     public LockingProcess Model { get; }
 
-    [ObservableProperty]
-    private bool _isSelected;
-
-    [ObservableProperty]
-    private string _status = "";
-
     public int ProcessId => Model.ProcessId;
-    public string Name => Model.Name;
-    public string ExecutablePath => Model.ExecutablePath ?? "(erişilemedi)";
-    public string StartTime => Model.StartTime == DateTime.MinValue ? "" : Model.StartTime.ToString("g");
-    public string TypeDescription => Model.TypeDescription;
-    public string LockedPaths => Model.LockedPathsSummary;
-    public string LockedPathsTooltip => Model.LockedPathsTooltip;
-    public bool IsProtected => Model.IsProtected;
-    public bool CanTerminate => !Model.IsProtected;
+
+    /// <summary>".exe" uzantısı olmadan, okunaklı ad.</summary>
+    public string Name => Model.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Model.Name[..^4] : Model.Name;
+
+    public string Details => $"PID {Model.ProcessId} · {Model.TypeDescription}";
+
+    public string Tooltip => string.Join(Environment.NewLine,
+        new[] { Model.ExecutablePath, Model.LockedPathsTooltip }.Where(s => !string.IsNullOrEmpty(s)));
+
+    public ImageSource? Icon => IconCache.Get(Model.ExecutablePath);
+
+    public bool CanStop => !Model.IsProtected;
 }
