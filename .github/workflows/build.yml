@@ -98,7 +98,7 @@ jobs:
             Add-AppxPackage -Path dist/KilitBul.msix -ExternalLocation (Resolve-Path dist).Path -ErrorAction Stop
             $p = Get-AppxPackage -Name coraspirin.KilitBul
             if (-not $p) { throw "paket kayıtlı görünmüyor" }
-            Write-Output "Paket kaydedildi: $($p.PackageFullName)"
+            Write-Output "::notice title=Paket kayıt testi::Windows build $build üzerinde kaydedildi: $($p.PackageFullName)"
           } catch {
             Write-Output "::error::Add-AppxPackage başarısız: $($_.Exception.Message)"
             exit 1
@@ -116,8 +116,15 @@ jobs:
             if (-not (Test-Path $candidate)) { choco install nsis -y --no-progress | Out-Null }
             $makensis = $candidate
           }
-          & $makensis "-DVERSION=${{ steps.version.outputs.value }}" "-DCERT_THUMBPRINT=${{ steps.msix.outputs.thumbprint }}" installer/KilitBul.nsi
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $out = & $makensis "-DVERSION=${{ steps.version.outputs.value }}" "-DCERT_THUMBPRINT=${{ steps.msix.outputs.thumbprint }}" installer/KilitBul.nsi 2>&1
+          $code = $LASTEXITCODE
+          $out | Write-Output
+          if ($code -ne 0) {
+            # Log indirilemediğinde de görülebilsin diye son satırları annotation olarak yaz.
+            $tail = ($out | Select-Object -Last 8 | ForEach-Object { "$_" }) -join ' | '
+            Write-Output "::error title=makensis ($code)::$tail"
+            exit $code
+          }
 
       - uses: actions/upload-artifact@v4
         with:
