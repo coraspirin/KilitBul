@@ -4,6 +4,7 @@
         Title="{Binding WindowTitle}"
         Width="980" Height="520" MinWidth="640" MinHeight="320"
         WindowStartupLocation="CenterScreen"
+        Icon="Assets/KilitBul.ico"
         AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver"
         FontSize="13">
     <Window.InputBindings>
@@ -32,19 +33,6 @@
         <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" LastChildFill="True">
             <ProgressBar DockPanel.Dock="Left" Width="120" Height="14" IsIndeterminate="True" Margin="0,0,8,0"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
-            <Button DockPanel.Dock="Right" Margin="0"
-                    Command="{Binding ToggleContextMenuCommand}">
-                <Button.Style>
-                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                        <Setter Property="Content" Value="Sağ tık menüsüne ekle" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsContextMenuRegistered}" Value="True">
-                                <Setter Property="Content" Value="Sağ tık menüsünden kaldır" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
             <TextBlock Text="{Binding StatusText}" ToolTip="{Binding StatusText}"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </DockPanel>

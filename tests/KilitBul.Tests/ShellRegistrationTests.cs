@@ -15,8 +15,9 @@ public class ShellRegistrationTests
             ShellRegistration.Register(exe, verb);
 
             Assert.True(ShellRegistration.IsRegistered(exe, verb));
-            foreach (var cls in new[] { "*", "Directory", "Drive" })
+            foreach (var cls in new[] { "*", "Directory" })
                 Assert.Equal($"\"{exe}\" \"%1\"", ShellRegistration.GetCommand(cls, verb));
+            Assert.Null(ShellRegistration.GetCommand("Drive", verb));
         }
         finally
         {
@@ -35,7 +36,7 @@ public class ShellRegistrationTests
         try
         {
             ShellRegistration.Register(exe, verb);
-            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\Drive\shell\{verb}");
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\Directory\shell\{verb}");
 
             Assert.False(ShellRegistration.IsRegistered(exe, verb));
         }
@@ -43,6 +44,18 @@ public class ShellRegistrationTests
         {
             ShellRegistration.Unregister(verb);
         }
+    }
+
+    [Fact]
+    public void Unregister_RemovesLegacyDriveEntry()
+    {
+        const string verb = "KilitBulTestLegacy";
+        using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\Drive\shell\{verb}\command"))
+            k.SetValue("", "x");
+
+        ShellRegistration.Unregister(verb);
+
+        Assert.Null(ShellRegistration.GetCommand("Drive", verb));
     }
 
     [Theory]

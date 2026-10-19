@@ -18,12 +18,12 @@ public partial class App : Application
                 case "--register":
                 case "/register":
                     RunAndExit(() => ShellRegistration.Register(Environment.ProcessPath!),
-                        "KilitBul sağ tık menüsüne eklendi.\nWindows 11'de \"Daha fazla seçenek göster\" altında görünür.");
+                        "Kilit Bul sağ tık menüsüne eklendi.\nWindows 11'de \"Daha fazla seçenek göster\" altında görünür.");
                     return;
 
                 case "--unregister":
                 case "/unregister":
-                    RunAndExit(() => ShellRegistration.Unregister(), "KilitBul sağ tık menüsünden kaldırıldı.");
+                    RunAndExit(() => ShellRegistration.Unregister(), "Kilit Bul sağ tık menüsünden kaldırıldı.");
                     return;
             }
         }

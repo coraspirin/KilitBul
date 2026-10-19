@@ -34,9 +34,6 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _scanCompleted;
 
-    [ObservableProperty]
-    private bool _isContextMenuRegistered;
-
     public bool HasTarget => !string.IsNullOrWhiteSpace(TargetPath);
     public bool IsIdle => !IsBusy;
     public bool IsAdministrator { get; } = ElevationHelper.IsAdministrator();
@@ -44,13 +41,10 @@ public partial class MainViewModel : ObservableObject
     // Sürücü kökleri hiçbir zaman "silinebilir" gösterilmez.
     public bool IsTargetFree => ScanCompleted && Processes.Count == 0 && !LockFinder.IsRootPath(TargetPath);
 
-    public string WindowTitle => IsAdministrator ? "KilitBul (Yönetici)" : "KilitBul";
-
-    private static string ExePath => Environment.ProcessPath!;
+    public string WindowTitle => IsAdministrator ? "Kilit Bul (Yönetici)" : "Kilit Bul";
 
     public MainViewModel()
     {
-        IsContextMenuRegistered = SafeIsRegistered();
         Processes.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(IsTargetFree));
@@ -301,32 +295,6 @@ public partial class MainViewModel : ObservableObject
         var args = string.IsNullOrWhiteSpace(TargetPath) ? Array.Empty<string>() : new[] { TargetPath };
         if (ElevationHelper.RestartElevated(args))
             Application.Current.Shutdown();
-    }
-
-    [RelayCommand]
-    private void ToggleContextMenu()
-    {
-        try
-        {
-            if (IsContextMenuRegistered)
-                ShellRegistration.Unregister();
-            else
-                ShellRegistration.Register(ExePath);
-            IsContextMenuRegistered = SafeIsRegistered();
-            StatusText = IsContextMenuRegistered
-                ? "Sağ tık menüsüne eklendi. Windows 11'de \"Daha fazla seçenek göster\" altında görünür."
-                : "Sağ tık menüsünden kaldırıldı.";
-        }
-        catch (Exception ex)
-        {
-            StatusText = "Kayıt defteri hatası: " + ex.Message;
-        }
-    }
-
-    private static bool SafeIsRegistered()
-    {
-        try { return ShellRegistration.IsRegistered(ExePath); }
-        catch { return false; }
     }
 
     private static string Describe(KillResult r) => r switch

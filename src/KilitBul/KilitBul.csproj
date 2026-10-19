@@ -8,9 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\KilitBul.ico</ApplicationIcon>
     <AssemblyName>KilitBul</AssemblyName>
     <RootNamespace>KilitBul</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Product>KilitBul</Product>
     <Description>Dosyayı/klasörü kilitleyen işlemleri bulur ve sonlandırır.</Description>
   </PropertyGroup>
@@ -25,6 +26,10 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\KilitBul.ico" />
   </ItemGroup>
 
   <ItemGroup>

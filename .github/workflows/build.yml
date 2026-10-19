@@ -33,9 +33,24 @@ jobs:
           }
 
       - name: Publish (tek exe, win-x64)
-        run: dotnet publish src/KilitBul/KilitBul.csproj -c Release -r win-x64 -o publish
+        run: dotnet publish src/KilitBul/KilitBul.csproj -c Release -r win-x64 -o dist
+
+      - name: Kurulum dosyası (NSIS)
+        shell: pwsh
+        run: |
+          $makensis = Get-Command makensis -ErrorAction SilentlyContinue
+          if (-not $makensis) {
+            $candidate = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+            if (-not (Test-Path $candidate)) { choco install nsis -y --no-progress | Out-Null }
+            $makensis = $candidate
+          }
+          $version = ([xml](Get-Content src/KilitBul/KilitBul.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          & $makensis "-DVERSION=$version" installer/KilitBul.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
         with:
           name: KilitBul-win-x64
-          path: publish/KilitBul.exe
+          path: |
+            dist/KilitBul.exe
+            dist/KilitBul-Setup-*.exe
