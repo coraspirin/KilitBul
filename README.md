@@ -79,10 +79,10 @@ paket runner'da deneme amaçlı kaydedilip kaldırılır, ardından NSIS ile `Ki
 
 1. `src/KilitBul/KilitBul.csproj` içindeki `<Version>`'ı artırın (ör. `1.4.0`).
 2. İsterseniz sürüm notlarını `installer/release-notes/v1.4.0.md` olarak yazın (yoksa GitHub otomatik üretir).
-3. Commit'leyip etiketi gönderin: `git tag v1.4.0 && git push origin main v1.4.0`.
+3. Commit'leyip `main`'e gönderin.
 
-CI, etiket ile sürümün uyuştuğunu denetler, kurulum dosyasını üretir ve GitHub Release olarak yayınlar.
-Kurulu uygulamalar bir sonraki açılışta yeni sürümü görür.
+CI, bu sürüm için henüz release yoksa `v1.4.0` etiketini ve GitHub Release'i oluşturup kurulum dosyasını ekler.
+Sürüm değişmeden yapılan push'lar yeni release oluşturmaz. Kurulu uygulamalar bir sonraki açılışta yeni sürümü görür.
 
 İkon `installer/make-icon.py` ile üretilir (`python3 installer/make-icon.py`; exe ikonu, pencere görseli ve MSIX logoları).
 
