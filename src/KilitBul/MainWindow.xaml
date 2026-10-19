@@ -45,7 +45,8 @@
                     </Style>
                 </Button.Style>
             </Button>
-            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding StatusText}" ToolTip="{Binding StatusText}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </DockPanel>
 
         <!-- Eylemler -->

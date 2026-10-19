@@ -35,13 +35,10 @@ public static class ShellRegistration
             Registry.CurrentUser.DeleteSubKeyTree($@"{ClassesRoot}\{cls}\shell\{verbName}", throwOnMissingSubKey: false);
     }
 
-    /// <summary>Kayıtlı mı ve komut bu exe'yi mi gösteriyor?</summary>
+    /// <summary>Tüm hedef sınıflarda (dosya, klasör, sürücü) kayıtlı mı ve komut bu exe'yi mi gösteriyor?</summary>
     public static bool IsRegistered(string exePath, string verbName = DefaultVerbName)
-    {
-        using var cmd = Registry.CurrentUser.OpenSubKey($@"{ClassesRoot}\*\shell\{verbName}\command");
-        var value = cmd?.GetValue("") as string;
-        return value is not null && value.Contains(exePath, StringComparison.OrdinalIgnoreCase);
-    }
+        => TargetClasses.All(cls =>
+            GetCommand(cls, verbName) is { } value && value.Contains(exePath, StringComparison.OrdinalIgnoreCase));
 
     internal static string? GetCommand(string cls, string verbName)
     {

@@ -18,7 +18,10 @@ public sealed class LockingProcess
 
     public bool IsProtected => ProcessKiller.IsProtected(this);
 
-    public string TypeDescription => AppType switch
+    /// <summary>KilitBul'un kendi işlemi mi? (Restart Manager onu RmCritical olarak raporlar.)</summary>
+    public bool IsSelf => ProcessId == Environment.ProcessId;
+
+    public string TypeDescription => IsSelf ? "KilitBul (bu uygulama)" : AppType switch
     {
         LockingAppType.MainWindow => "Uygulama",
         LockingAppType.OtherWindow => "Pencere",

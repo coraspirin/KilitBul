@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace KilitBul.Services;
 
@@ -58,7 +59,7 @@ internal static class RestartManager
     }
 
     [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
-    private static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, string strSessionKey);
+    private static extern int RmStartSession(out uint pSessionHandle, int dwSessionFlags, StringBuilder strSessionKey);
 
     [DllImport("rstrtmgr.dll")]
     private static extern int RmEndSession(uint pSessionHandle);
@@ -84,7 +85,8 @@ internal static class RestartManager
         if (paths.Count == 0)
             return Array.Empty<RmLockInfo>();
 
-        var key = Guid.NewGuid().ToString("N")[..CchRmSessionKey];
+        // strSessionKey bir çıktı tamponudur; RM oturum anahtarını buraya yazar.
+        var key = new StringBuilder(CchRmSessionKey + 1);
         int rc = RmStartSession(out uint handle, 0, key);
         if (rc != 0)
             throw new Win32Exception(rc, "Restart Manager oturumu başlatılamadı.");

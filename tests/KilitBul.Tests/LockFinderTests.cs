@@ -41,8 +41,22 @@ public sealed class LockFinderTests : IDisposable
 
         var self = Assert.Single(result, p => p.ProcessId == Environment.ProcessId);
         Assert.Contains(file, self.LockedPaths, StringComparer.OrdinalIgnoreCase);
-        Assert.False(self.IsProtected);
+        // KilitBul kendi işlemini asla sonlandırmamalı.
+        Assert.True(self.IsSelf);
+        Assert.True(self.IsProtected);
+        Assert.Equal(KillResult.Protected, ProcessKiller.Kill(self));
     }
+
+    [Theory]
+    [InlineData(@"C:\", true)]
+    [InlineData(@"\\sunucu\paylasim", true)]
+    [InlineData(@"\\sunucu\paylasim\", true)]
+    [InlineData(@"C:\Windows", false)]
+    [InlineData(@"\\sunucu\paylasim\klasor", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsRootPath_DetectsDriveAndShareRoots(string? path, bool expected)
+        => Assert.Equal(expected, LockFinder.IsRootPath(path));
 
     [Fact]
     public void Folder_FindsLockedFileInSubdirectoryAmongMany()

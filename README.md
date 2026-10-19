@@ -43,7 +43,13 @@ tarafından kilitlendiği bulunur. Ayrıca klasör altından exe/dll yüklemiş 
 ## Bilinen kısıtlar
 
 - Bir klasörü yalnızca **çalışma dizini** olarak tutan işlemler (ör. o klasörde açık bir `cmd`/PowerShell)
-  Restart Manager tarafından raporlanmaz.
+  Restart Manager tarafından raporlanmaz. Bu yüzden klasör taramasında liste boş çıksa bile silme başarısız olabilir;
+  bu durumda KilitBul taramayı tekrarlar.
+- Erişim izni olmayan alt klasörlerdeki dosyalar taramada atlanır.
+- Sürücü kökleri taranabilir ama **Şimdi sil** ile silinemez.
+- KilitBul yönetici olarak açıldığında, Windows güvenlik kısıtı (UIPI) nedeniyle normal Explorer penceresinden
+  sürükle-bırak çalışmaz; **Dosya seç…/Klasör seç…** kullanın.
+- KilitBul'un kendi işlemi listede görünebilir (ör. exe'sinin bulunduğu klasör tarandığında) ama sonlandırılamaz.
 - Normal kullanıcı olarak başka kullanıcıların/servislerin işlemleri listelenebilir ama sonlandırılamayabilir;
   bu durumda **🛡 Yönetici olarak aç** kullanın.
 - Çekirdek sürücülerinin tuttuğu kilitler (ör. antivirüs filtreleri) görünmez.

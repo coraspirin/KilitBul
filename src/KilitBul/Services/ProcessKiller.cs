@@ -12,6 +12,7 @@ public enum KillResult
     AccessDenied,
     Protected,
     NoWindow,
+    StillRunning,
     Failed,
 }
 
@@ -28,11 +29,11 @@ public static class ProcessKiller
 
     public static bool IsProtected(LockingProcess p)
     {
-        if (p.ProcessId is 0 or 4)
+        // KilitBul kendini sonlandırmamalı (ör. kendi exe'sinin bulunduğu klasör tarandığında listede çıkar).
+        if (p.ProcessId is 0 or 4 || p.IsSelf)
             return true;
-        // Restart Manager çağıran işlemi (KilitBul'un kendisi) her zaman RmCritical olarak raporlar;
-        // diğer RmCritical işlemler sonlandırılırsa sistem çökebilir.
-        if (p.AppType == LockingAppType.Critical && p.ProcessId != Environment.ProcessId)
+        // RmCritical işlemler sonlandırılırsa sistem çökebilir.
+        if (p.AppType == LockingAppType.Critical)
             return true;
         var exeName = p.ExecutablePath is not null ? System.IO.Path.GetFileName(p.ExecutablePath) : p.Name;
         return ProtectedNames.Contains(exeName) || ProtectedNames.Contains(p.Name);
@@ -75,8 +76,7 @@ public static class ProcessKiller
         try
         {
             proc.Kill(entireTree);
-            proc.WaitForExit(3000);
-            return KillResult.Success;
+            return proc.WaitForExit(3000) ? KillResult.Success : KillResult.StillRunning;
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 5)
         {

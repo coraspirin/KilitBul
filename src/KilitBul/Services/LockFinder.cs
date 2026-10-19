@@ -40,6 +40,25 @@ public static class LockFinder
             .ToList();
     }
 
+    /// <summary>Yol bir sürücü/paylaşım kökü mü (ör. <c>C:\</c>, <c>\\sunucu\paylaşım</c>)?</summary>
+    public static bool IsRootPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+        try
+        {
+            var full = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(full);
+            return root is not null && string.Equals(
+                full.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     private static void ScanDirectory(string root, Dictionary<int, LockingProcess> byPid,
         IProgress<ScanProgress>? progress, CancellationToken ct)
     {

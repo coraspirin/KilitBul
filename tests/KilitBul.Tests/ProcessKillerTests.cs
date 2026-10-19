@@ -24,6 +24,13 @@ public class ProcessKillerTests
         => Assert.True(Make(1234, "foo.exe", LockingAppType.Critical).IsProtected);
 
     [Fact]
+    public void CurrentProcess_IsProtectedEvenIfCritical()
+    {
+        Assert.True(Make(Environment.ProcessId, "KilitBul.exe").IsProtected);
+        Assert.True(Make(Environment.ProcessId, "KilitBul.exe", LockingAppType.Critical).IsProtected);
+    }
+
+    [Fact]
     public void NormalProcess_IsNotProtected()
         => Assert.False(Make(1234, "WINWORD.EXE", LockingAppType.MainWindow).IsProtected);
 
